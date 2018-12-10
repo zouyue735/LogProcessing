@@ -11,6 +11,8 @@ project/plugins/project/
 .cache
 .lib/
 
+.idea/
+
 # User-specific stuff
 .idea/**/workspace.xml
 .idea/**/tasks.xml

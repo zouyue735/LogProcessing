@@ -106,6 +106,9 @@ object LogProcessing {
       lazy val period: Long = {
         logs.last.end.toDate.getTime - logs.head.start.toDate.getTime
       }
+      lazy val start: LocalDateTime = logs.head.start
+      lazy val end: LocalDateTime = logs.last.end
+      lazy val stepCount: Int = logs.size
 
       def diff: Seq[Tuple2[BillingApiCall, BillingApiCall]] = {
         logs.tail.zip(logs.dropRight(1))
@@ -118,33 +121,42 @@ object LogProcessing {
     nodes.clear()
     streams.clear()
 
-    def getSequences[A](seq: Seq[A]): Seq[Seq[A]] = {
-      def getSequencePair(seq: Seq[A]): Tuple2[mutable.Buffer[mutable.Buffer[A]], mutable.Buffer[mutable.Buffer[A]]] = {
-        if (seq.length == 1) (mutable.Buffer(seq.toBuffer), mutable.Buffer.empty)
-        else {
-          val p = getSequencePair(seq.tail)
-          p._2 ++= p._1
-          p._1.indices.foreach(idx => p._1.update(idx, p._1(idx) += seq.head))
-          p._1 += mutable.Buffer(seq.head)
-          (p._1, p._2)
-        }
+//    def getSequences[A](seq: Seq[A]): Seq[Seq[A]] = {
+//      def getSequencePair(seq: Seq[A]): Tuple2[mutable.Buffer[mutable.Buffer[A]], mutable.Buffer[mutable.Buffer[A]]] = {
+//        if (seq.length == 1) (mutable.Buffer(seq.toBuffer), mutable.Buffer.empty)
+//        else {
+//          val p = getSequencePair(seq.tail)
+//          p._2 ++= p._1
+//          p._1.indices.foreach(idx => p._1.update(idx, p._1(idx) += seq.head))
+//          p._1 += mutable.Buffer(seq.head)
+//          (p._1, p._2)
+//        }
+//      }
+//
+//      val start = System.currentTimeMillis()
+//      val p = getSequencePair(seq)
+//      p._1 ++ p._2
+//    }
+
+    def printSequences(seq: Seq[BillingApiCall], writer: PrintWriter): Unit = {
+      def printInternal(remaining: Seq[BillingApiCall], prefixes: Seq[Seq[BillingApiCall]]): Unit = {
+        val newPrefixes = prefixes.map(p => p.:+(remaining.head)).:+(remaining.take(1))
+        newPrefixes.foreach(print)
+
+        printInternal(remaining.tail, newPrefixes)
       }
-
-      val start = System.currentTimeMillis()
-      val p = getSequencePair(seq)
-      p._1 ++ p._2
-    }
-
-
-    def combine(t1: Tuple4[Long, Long, Long, Long], t2: Tuple4[Long, Long, Long, Long]): Tuple4[Long, Long, Long, Long] = {
-      (t1._1 + t2._1, t1._2 + t2._2, t1._3 + t2._3, t1._4 + t2._4)
+      def print(logs: Seq[BillingApiCall]): Unit = {
+        val p = new Process(logs)
+        writer.println("Insert into process (id, signature, period, free_period, intersect_period, start, end, step_count) VALUES " +
+          f"(next_val(\'seq_process\'), \'${p.signature}\', ${p.period}, ${p.freePeriod}, ${p.intersectPeriod}, \'${p.start.formatted("yyyy-MM-dd HH:mm:ss.SSS")}\', \'${p.end.formatted("yyyy-MM-dd HH:mm:ss.SSS")}\', ${p.stepCount});")
+      }
+      printInternal(seq, Seq())
     }
 
     val writer = new PrintWriter("./out/sequences")
     processes.foreach({ case (session, seqs) =>
       println(seqs.size)
-      getSequences(seqs)
-        .map(new Process(_)).foreach(writer.println(_))
+      printSequences(seqs, writer)
       writer.flush()
     })
   }

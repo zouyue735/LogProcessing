@@ -9,3 +9,7 @@ case class Const(value: String) extends Word
 case class Variable[A](value: A) extends Word
 
 case class Wildcard() extends Word
+
+trait RawLog {
+  def log(): String
+}
